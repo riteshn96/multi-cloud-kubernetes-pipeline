@@ -1,0 +1,12 @@
+# kubernetes/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-web-app-service
+spec:
+  type: LoadBalancer # Creates a public-facing load balancer
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app: my-web-app # Sends traffic to pods with this label
