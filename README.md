@@ -190,6 +190,13 @@ A log of challenges faced and their solutions.
     4.  I also learned that the region could be sourced reliably using a data block: `data.aws_region.current.name`.
     5.  I updated the `outputs.tf` file with the correct values, which then allowed the `terraform apply` and `terraform output` commands to succeed.
 *   **Lesson Learned:** When using third-party Terraform modules, it's crucial to consult their documentation or use tools like `terraform console` to inspect the exact output attributes they expose, as these can change between module versions.
+### Pods Stuck in "Pending" State on EKS
+
+*   **Problem:** After deploying the application with `kubectl apply`, the pods remained in a `Pending` state indefinitely.
+*   **Analysis:** I used the `kubectl describe pod <pod-name>` command to investigate. The `Events` section showed a `FailedScheduling` warning with the message: `0/1 nodes are available: 1 Too many pods`. This indicated that the issue wasn't a lack of CPU or memory, but that the worker node had hit the maximum number of pods it was allowed to run.
+*   **Root Cause:** AWS EKS imposes a hard limit on the number of pods per EC2 instance type, based on the number of available network interfaces (ENIs). The `t2.micro` instance type only supports a maximum of 4 pods. After accounting for the system pods required by EKS, there were no available slots for my application pods.
+*   **Solution:** I modified the `terraform/main.tf` file to change the worker node `instance_types` from `["t2.micro"]` to `["t2.small"]`. A `t2.small` instance supports up to 11 pods, providing sufficient capacity. After running `terraform apply` to replace the node, the pods scheduled successfully and entered the `Running` state.
+*   **Lesson Learned:** When designing a Kubernetes cluster, it's critical to consider the pod density limits for your chosen instance types, not just CPU and memory resources.
 ---
 
 ## 8. Cleanup
