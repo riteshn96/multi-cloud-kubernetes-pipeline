@@ -169,7 +169,19 @@ A log of challenges faced and their solutions.
 *   **Analysis:** This error indicated that AWS EKS no longer supports the creation of new clusters with Kubernetes version 1.22, which was specified in the Terraform module. Cloud providers regularly deprecate older versions for security and support reasons.
 *   **Solution:** I resolved this by updating the `cluster_version` parameter in the `terraform/main.tf` file from `"1.22"` to a currently supported version, `"1.27"`. After this one-line code change, running `terraform apply` again was successful.
 *   **Lesson Learned:** Infrastructure as Code makes resolving such issues straightforward and repeatable. It also underscores the need to consult cloud provider documentation for supported versions when defining resources.
+### Troubleshooting Terraform Outputs
 
+*   **Issue:** After creating the EKS cluster, the `terraform output` command failed with `Warning: No outputs found` and subsequent attempts gave `Error: Unsupported attribute`.
+*   **Analysis:** This was a two-part problem:
+    1.  The `outputs.tf` file was not created in the correct directory initially, so Terraform didn't register it.
+    2.  Once the file was created, the attributes used (`module.eks.cluster_name`) were incorrect for the specific version of the `terraform-aws-modules/eks/aws` module being used.
+*   **Solution:**
+    1.  I created the `outputs.tf` file in the correct `./terraform/` directory.
+    2.  I used the `terraform console` command to inspect the available attributes of the `module.eks` object.
+    3.  I discovered the correct attribute for the cluster's name was `module.eks.cluster_id`.
+    4.  I also learned that the region could be sourced reliably using a data block: `data.aws_region.current.name`.
+    5.  I updated the `outputs.tf` file with the correct values, which then allowed the `terraform apply` and `terraform output` commands to succeed.
+*   **Lesson Learned:** When using third-party Terraform modules, it's crucial to consult their documentation or use tools like `terraform console` to inspect the exact output attributes they expose, as these can change between module versions.
 ---
 
 ## 8. Cleanup
