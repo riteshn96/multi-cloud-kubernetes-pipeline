@@ -99,16 +99,32 @@ The repository is structured to separate concerns, making it clean and maintaina
     *   For AWS: Run `aws configure` and provide your access keys.
     *   For Azure: Run `az login` to authenticate.
 
-5.  **Provision Infrastructure with Terraform (To be added):**
-    *   Navigate to the `terraform/` directory.
-    *   Initialize Terraform: `terraform init`
-    *   Apply the configuration for AWS: `terraform workspace select aws && terraform apply`
-    *   Apply the configuration for Azure: `terraform workspace select azure && terraform apply`
+5. **Provision AWS Infrastructure with Terraform:**
+    *   Navigate to the `terraform/` directory: `cd terraform`
+    *   Initialize Terraform. This downloads the necessary providers and modules:
+        ```bash
+        terraform init
+        ```
+    *   Apply the configuration to create the EKS cluster and VPC. This will take 15-20 minutes.
+        ```bash
+        terraform apply
+        ```
+    *   Confirm the plan by typing `yes` when prompted.
 
-6.  **Set up Jenkins and Run the Pipeline (To be added):**
+6.  **Configure `kubectl` to Connect to the EKS Cluster:**
+    *   Once `terraform apply` is complete, Terraform will output a command to configure `kubectl`. Run this command in your terminal:
+        ```bash
+        aws eks --region us-east-1 update-kubeconfig --name my-app-cluster
+        ```
+    *   Verify the connection by listing the cluster nodes. You should see one or more nodes in the `Ready` state.
+        ```bash
+        kubectl get nodes
+        ```
+
+7.  **Set up Jenkins and Run the Pipeline (To be added):**
     *   *(This section will be filled out once Jenkins is configured.)*
 
-7.  **Verify the Cloud Deployment:**
+8.  **Verify the Cloud Deployment:**
     *   *(This section will detail how to get the Load Balancer IP from Kubernetes.)*
     
 
@@ -147,6 +163,12 @@ A log of challenges faced and their solutions.
     2.  Select the package and go into its **"Package settings"**.
     3.  Change the package visibility from **Private to Public**.
     4.  Use the **"Connect repository"** feature to manually link the package to this source code repository. Subsequent pushes will now update the linked package automatically.
+    ### EKS Unsupported Kubernetes Version Error
+
+*   **Issue:** The initial `terraform apply` failed with the error `InvalidParameterException: unsupported Kubernetes version 1.22`.
+*   **Analysis:** This error indicated that AWS EKS no longer supports the creation of new clusters with Kubernetes version 1.22, which was specified in the Terraform module. Cloud providers regularly deprecate older versions for security and support reasons.
+*   **Solution:** I resolved this by updating the `cluster_version` parameter in the `terraform/main.tf` file from `"1.22"` to a currently supported version, `"1.27"`. After this one-line code change, running `terraform apply` again was successful.
+*   **Lesson Learned:** Infrastructure as Code makes resolving such issues straightforward and repeatable. It also underscores the need to consult cloud provider documentation for supported versions when defining resources.
 
 ---
 
