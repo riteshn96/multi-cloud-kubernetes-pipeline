@@ -71,33 +71,46 @@ The repository is structured to separate concerns, making it clean and maintaina
 
 ### Step-by-Step Instructions
 
-*(This section is your detailed, step-by-step guide on how someone else could replicate your work. Be precise!)*
-
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/YOUR_USERNAME/your-project-name.git
-    cd your-project-name
+    git clone https://github.com/YOUR_USERNAME/multi-cloud-devops-pipeline.git
+    cd multi-cloud-devops-pipeline
     ```
 
-2.  **Configure Cloud Credentials:**
+2.  **Build and Test Locally (Optional but Recommended):**
+    *   Before deploying, verify the application works locally. Replace `your-dockerhub-username` with your Docker Hub username.
+    ```bash
+    # Build the Docker image
+    docker build -t your-dockerhub-username/multi-cloud-devops-pipeline:latest .
+
+    # Run the container
+    docker run --rm -p 8080:80 your-dockerhub-username/multi-cloud-devops-pipeline:latest
+    ```
+    *   Navigate to `http://localhost:8080` in a browser to see the app running. Stop the container with `Ctrl + C` in the terminal.
+
+3.  **Push Docker Image to a Registry:**
+    *   The pipeline will need access to the container image. Log in to Docker Hub and push the image you just built.
+    ```bash
+    docker login
+    docker push your-dockerhub-username/multi-cloud-devops-pipeline:latest
+    ```
+
+4.  **Configure Cloud Credentials:**
     *   For AWS: Run `aws configure` and provide your access keys.
     *   For Azure: Run `az login` to authenticate.
 
-3.  **Provision Infrastructure with Terraform:**
+5.  **Provision Infrastructure with Terraform (To be added):**
     *   Navigate to the `terraform/` directory.
     *   Initialize Terraform: `terraform init`
     *   Apply the configuration for AWS: `terraform workspace select aws && terraform apply`
     *   Apply the configuration for Azure: `terraform workspace select azure && terraform apply`
 
-4.  **Set up Jenkins:**
-    *(Explain how to set up Jenkins, install plugins, and configure credentials for GitHub, AWS, Azure, and Docker Hub.)*
+6.  **Set up Jenkins and Run the Pipeline (To be added):**
+    *   *(This section will be filled out once Jenkins is configured.)*
 
-5.  **Run the Pipeline:**
-    *   Create a new pipeline job in Jenkins pointing to the `Jenkinsfile` in this repository.
-    *   Trigger the build. The pipeline will build the Docker image and deploy it to both AWS and Azure.
-
-6.  **Verify the Deployment:**
-    *(Explain how to get the Load Balancer IP from both Kubernetes clusters and access the application in a browser.)*
+7.  **Verify the Cloud Deployment:**
+    *   *(This section will detail how to get the Load Balancer IP from Kubernetes.)*
+    
 
 ---
 
@@ -111,6 +124,7 @@ The repository is structured to separate concerns, making it clean and maintaina
 *   **Multi-Stage Docker Builds:** ** The `Dockerfile` uses a multi-stage build pattern. A `builder` stage is used to install dependencies, and the final image is built from a `slim` base, copying only the necessary application code and packages. This best practice significantly reduces the final image size, which improves security (smaller attack surface) and performance (faster downloads/deploys).
 *   **Secrets Management:** Jenkins credentials store all sensitive keys (AWS, Azure, Docker Hub). No secrets are hardcoded in the repository.
 *   **Multi-Cloud Strategy:** Deploying to both AWS and Azure demonstrates a strategy for high availability and avoiding vendor lock-in.
+*   **Pinned Dependencies for Reproducible Builds:** The `requirements.txt` file specifies exact versions for packages (e.g., `Werkzeug==2.2.2`). This prevents unexpected build failures caused by upstream library updates and ensures that the Docker image is built with the same dependencies every time, leading to highly predictable and stable builds.
 
 ---
 
