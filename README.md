@@ -128,7 +128,29 @@ The repository is structured to separate concerns, making it clean and maintaina
 
 ---
 
-## 7. Cleanup
+---
+
+## 7. Troubleshooting & Gotchas
+
+A log of challenges faced and their solutions.
+
+### Issue: `internal error` when creating a repository on Docker Hub
+
+*   **Symptom:** Docker Hub returned a generic "internal error" when trying to create a repository with a specific name (`multi-cloud-devops-pipeline`).
+*   **Solution:** Pivoted from Docker Hub to the **GitHub Container Registry (GHCR)**, which is more tightly integrated with the project's source code repository. This demonstrates adaptability and knowledge of alternative, robust tooling.
+
+### Issue: Pushed package not visible in the GitHub repository
+
+*   **Symptom:** After a successful `docker push` to `ghcr.io`, the package was not visible on the main repository page.
+*   **Solution:** For the first push from a personal account, the package defaulted to **Private** visibility and was not automatically linked to the repository. The fix was to:
+    1.  Navigate to my main GitHub profile's **"Packages"** tab.
+    2.  Select the package and go into its **"Package settings"**.
+    3.  Change the package visibility from **Private to Public**.
+    4.  Use the **"Connect repository"** feature to manually link the package to this source code repository. Subsequent pushes will now update the linked package automatically.
+
+---
+
+## 8. Cleanup
 
 To avoid incurring cloud costs, remember to destroy all infrastructure after you are finished.
 
