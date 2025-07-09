@@ -197,6 +197,21 @@ A log of challenges faced and their solutions.
 *   **Root Cause:** AWS EKS imposes a hard limit on the number of pods per EC2 instance type, based on the number of available network interfaces (ENIs). The `t2.micro` instance type only supports a maximum of 4 pods. After accounting for the system pods required by EKS, there were no available slots for my application pods.
 *   **Solution:** I modified the `terraform/main.tf` file to change the worker node `instance_types` from `["t2.micro"]` to `["t2.small"]`. A `t2.small` instance supports up to 11 pods, providing sufficient capacity. After running `terraform apply` to replace the node, the pods scheduled successfully and entered the `Running` state.
 *   **Lesson Learned:** When designing a Kubernetes cluster, it's critical to consider the pod density limits for your chosen instance types, not just CPU and memory resources.
+### Debugging `ERR_CONNECTION_TIMED_OUT` for an EKS LoadBalancer Service
+
+*   **Problem:** After deploying the application and service, the pods were `Running` and the service had an `EXTERNAL-IP`, but accessing the URL resulted in a connection timeout error.
+
+*   **Systematic Debugging Process:**
+    1.  **Initial Check:** I confirmed the Security Group rule allowing traffic from the Load Balancer's SG to the Node's SG already existed, which meant the issue was more complex than a simple firewall block.
+    2.  **Isolate the Problem:** To determine if the issue was internal to the cluster or with the external Load Balancer, I launched a temporary debug pod inside the cluster using `kubectl run -it --rm --image=nicolaka/netshoot debug-pod -- bash`.
+    3.  **Internal Connectivity Test:** From inside the debug pod, I used `curl http://<service-cluster-ip>` to connect to the application's internal ClusterIP. The request was successful and returned the application's "Hello World" message.
+    4.  **Refined Diagnosis:** This test proved that the pods, the application, the internal service, and the container network were all working correctly. The fault had to be with the communication from the AWS Load Balancer to the worker nodes.
+    5.  **Identify the NodePort:** I ran `kubectl get service` and inspected the `PORT(S)` column (`80:31234/TCP`) to find the specific **NodePort** (`31234`) that EKS assigned for the service on the worker node.
+    6.  **Solution:** I edited the worker node's Security Group inbound rules. Instead of a general `All traffic` rule, I created a highly specific `Custom TCP` rule to allow traffic **only on the exact NodePort (`31234`)** from the Load Balancer's Security Group as the source.
+
+*   **Root Cause:** The default health checks from the Application Load Balancer (ALB) created by the AWS Load Balancer Controller need to be able to reach the specific NodePort on the instances. While a general rule was present, creating a specific rule for the NodePort resolved the health check failures.
+
+*   **Lesson Learned:** When debugging Kubernetes networking, it's critical to isolate the problem scope. Testing connectivity from *inside* the cluster (`pod-to-service`) is the fastest way to determine if the problem is internal or external.
 ---
 
 ## 8. Cleanup
