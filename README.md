@@ -111,14 +111,22 @@ The repository is structured to separate concerns, making it clean and maintaina
         ```
     *   Confirm the plan by typing `yes` when prompted.
 
-6.  **Configure `kubectl` to Connect to the EKS Cluster:**
-    *   Once `terraform apply` is complete, Terraform will output a command to configure `kubectl`. Run this command in your terminal:
-        ```bash
-        aws eks --region us-east-1 update-kubeconfig --name my-app-cluster
-        ```
-    *   Verify the connection by listing the cluster nodes. You should see one or more nodes in the `Ready` state.
-        ```bash
-        kubectl get nodes
+6.  **Configure `kubectl` to Connect to the EKS Cluster
+
+*   Once `terraform apply` is complete, you first need to get the configuration command by running `terraform output`.
+*   Run the output command in your terminal:
+    ```bash
+    aws eks --region us-east-1 update-kubeconfig --name my-app-cluster
+    ```
+*   This will update your local `~/.kube/config` file, adding a new context for your EKS cluster.
+*   Verify the connection by listing the cluster nodes. You should see one or more nodes in the `Ready` state.
+    ```bash
+    kubectl get nodes
+    ```
+*   **Expected Output:**
+    ```
+    NAME                         STATUS   ROLES    AGE    VERSION
+    ip-10-0-2-140.ec2.internal   Ready    <none>   112m   v1.27.16-eks-aeac579
         ```
 
 7.  **Set up Jenkins and Run the Pipeline (To be added):**
