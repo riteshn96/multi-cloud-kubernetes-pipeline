@@ -1,4 +1,4 @@
-# kubernetes/deployment.yaml
+# In kubernetes/base/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,20 +6,15 @@ metadata:
 spec:
   replicas: 2
   selector:
-    matchLabels:
-      app: my-web-app
+    matchLabels: {app: my-web-app}
   template:
     metadata:
-      labels:
-        app: my-web-app
+      labels: {app: my-web-app}
     spec:
       containers:
-        - name: web-server-container
-          # This is the path to your image in GHCR.
-          # We will make this dynamic later in Jenkins.
-          image: ghcr.io/riteshn96/multi-cloud-devops-pipeline:latest
-          ports:
-            - containerPort: 80
-          env:
-            - name: CLOUD_PROVIDER
-              value: "AWS"
+      - name: web-server-container
+        # The image tag will be set by the Jenkins pipeline
+        image: ghcr.io/riteshn96/multi-cloud-devops-pipeline:latest
+        ports:
+        - containerPort: 80
+        # The env block that was here should be REMOVED from the base file.
