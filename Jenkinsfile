@@ -1,4 +1,4 @@
-// Jenkinsfile with Deploy Stage
+// Jenkinsfile - Final version with all stages and correct syntax
 
 pipeline {
     // This top-level agent is now just a lightweight coordinator
@@ -38,48 +38,35 @@ pipeline {
         }
 
         stage('Deploy to AWS EKS') {
-    // Use a different agent that has all our deployment tools
-    agent {
-        docker {
-            image 'bitnami/kubectl:1.27'
-            // Add this args line to override the container's default entrypoint
-            args '--entrypoint=""' 
-        }
-    }
-    steps {
-        // Correct the syntax for withCredentials
-        withCredentials([aws(credentialsId: 'aws-credentials', region: env.AWS_REGION)]) {
-            script {
-                def imageTag = env.GIT_COMMIT.take(7)
-                
-                echo "Deploying image with tag: ${imageTag} to EKS cluster: ${EKS_CLUSTER_NAME}"
-                
-                // 1. Configure kubectl to connect to the EKS cluster
-                sh "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME}"
-                
-                // 2. Use kustomize to set the new image tag in the deployment manifest
-                sh "cd kubernetes && kustomize edit set image ghcr.io/riteshn96/multi-cloud-devops-pipeline=ghcr.io/riteshn96/multi-cloud-devops-pipeline:${imageTag}"
-                
-                // 3. Apply the updated manifests to the cluster
-                sh "kustomize build kubernetes/ | kubectl apply -f -"
-                
-                echo "Deployment to EKS successful!"
+            // Use a different agent that has all our deployment tools
+            agent {
+                docker {
+                    image 'bitnami/kubectl:1.27'
+                    // Override the container's default entrypoint to keep it alive
+                    args '--entrypoint=""' 
+                }
             }
-        }
-    }
-}
-    }
-    }
-
-    post {
-        always {
-            echo 'Pipeline completed.'
-        }
-        success {
-            echo 'Pipeline succeeded!'
-        }
-        failure {
-            echo 'Pipeline failed!'
-        }
-    }
-}
+            steps {
+                // Use the correct syntax for withCredentials
+                withCredentials([aws(credentialsId: 'aws-credentials', region: env.AWS_REGION)]) {
+                    script {
+                        def imageTag = env.GIT_COMMIT.take(7)
+                        
+                        echo "Deploying image with tag: ${imageTag} to EKS cluster: ${EKS_CLUSTER_NAME}"
+                        
+                        // 1. Configure kubectl to connect to the EKS cluster
+                        sh "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME}"
+                        
+                        // 2. Use kustomize to set the new image tag in the deployment manifest
+                        sh "cd kubernetes && kustomize edit set image ghcr.io/riteshn96/multi-cloud-devops-pipeline=ghcr.io/riteshn96/multi-cloud-devops-pipeline:${imageTag}"
+                        
+                        // 3. Apply the updated manifests to the cluster
+                        sh "kustomize build kubernetes/ | kubectl apply -f -"
+                        
+                        echo "Deployment to EKS successful!"
+                    }
+                }
+            }
+        } // This brace closes the 'Deploy to AWS EKS' stage
+    } // This brace closes the 'stages' block
+} // This brace closes the 'pipeline' block
