@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent any // A lightweight coordinator
 
     environment {
         DOCKER_IMAGE_NAME = "ghcr.io/riteshn96/multi-cloud-devops-pipeline"
@@ -39,42 +39,42 @@ pipeline {
             parallel {
                 
                 stage('Deploy to AWS EKS') {
-                    agent {
-                        // CORRECTED SYNTAX HERE
-                        docker { image = 'alpine/k8s:1.27.5' }
-                    }
+                    // NO AGENT BLOCK HERE
                     steps {
-                        withCredentials([aws(credentialsId: 'aws-credentials')]) {
-                            script {
-                                def imageTag = env.GIT_COMMIT.take(7)
-                                echo "Deploying image with tag: ${imageTag} to EKS..."
-                                sh "export AWS_DEFAULT_REGION=${AWS_REGION}"
-                                sh "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_REGION}"
-                                sh "kustomize edit set image ghcr.io/riteshn96/multi-cloud-devops-pipeline=ghcr.io/riteshn96/multi-cloud-devops-pipeline:${imageTag} kubernetes/overlays/aws"
-                                sh "kustomize build kubernetes/overlays/aws | kubectl apply -f -"
-                                echo "Deployment to EKS successful!"
+                        // THIS IS THE CORRECTED PATTERN
+                        docker.image('alpine/k8s:1.27.5').inside {
+                            withCredentials([aws(credentialsId: 'aws-credentials')]) {
+                                script {
+                                    def imageTag = env.GIT_COMMIT.take(7)
+                                    echo "Deploying image with tag: ${imageTag} to EKS..."
+                                    sh "export AWS_DEFAULT_REGION=${AWS_REGION}"
+                                    sh "aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_REGION}"
+                                    sh "kustomize edit set image ghcr.io/riteshn96/multi-cloud-devops-pipeline=ghcr.io/riteshn96/multi-cloud-devops-pipeline:${imageTag} kubernetes/overlays/aws"
+                                    sh "kustomize build kubernetes/overlays/aws | kubectl apply -f -"
+                                    echo "Deployment to EKS successful!"
+                                }
                             }
                         }
                     }
                 }
 
                 stage('Deploy to Azure AKS') {
-                    agent {
-                        // CORRECTED SYNTAX HERE
-                        docker { image = 'alpine/k8s:1.27.5' }
-                    }
+                    // NO AGENT BLOCK HERE
                     steps {
-                        withCredentials([azureServicePrincipal(credentialsId: 'azure-credentials')]) {
-                            script {
-                                def imageTag = env.GIT_COMMIT.take(7)
-                                echo "Deploying image with tag: ${imageTag} to AKS..."
-                                sh 'apk add --no-cache curl'
-                                sh 'curl -sL https://aka.ms/InstallAzureCLIDeb | bash'
-                                sh '/usr/bin/az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID'
-                                sh "/usr/bin/az aks get-credentials --resource-group ${AZURE_RG_NAME} --name ${AZURE_AKS_NAME} --overwrite-existing"
-                                sh "kustomize edit set image ghcr.io/riteshn96/multi-cloud-devops-pipeline=ghcr.io/riteshn96/multi-cloud-devops-pipeline:${imageTag} kubernetes/overlays/azure"
-                                sh "kustomize build kubernetes/overlays/azure | kubectl apply -f -"
-                                echo "Deployment to AKS successful!"
+                        // THIS IS THE CORRECTED PATTERN
+                        docker.image('alpine/k8s:1.27.5').inside {
+                            withCredentials([azureServicePrincipal(credentialsId: 'azure-credentials')]) {
+                                script {
+                                    def imageTag = env.GIT_COMMIT.take(7)
+                                    echo "Deploying image with tag: ${imageTag} to AKS..."
+                                    sh 'apk add --no-cache curl'
+                                    sh 'curl -sL https://aka.ms/InstallAzureCLIDeb | bash'
+                                    sh '/usr/bin/az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID'
+                                    sh "/usr/bin/az aks get-credentials --resource-group ${AZURE_RG_NAME} --name ${AZURE_AKS_NAME} --overwrite-existing"
+                                    sh "kustomize edit set image ghcr.io/riteshn96/multi-cloud-devops-pipeline=ghcr.io/riteshn96/multi-cloud-devops-pipeline:${imageTag} kubernetes/overlays/azure"
+                                    sh "kustomize build kubernetes/overlays/azure | kubectl apply -f -"
+                                    echo "Deployment to AKS successful!"
+                                }
                             }
                         }
                     }
