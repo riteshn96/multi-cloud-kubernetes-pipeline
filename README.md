@@ -129,9 +129,33 @@ The repository is structured to separate concerns, making it clean and maintaina
     ip-10-0-2-140.ec2.internal   Ready    <none>   112m   v1.27.16-eks-aeac579
         ```
 
-7.  **Set up Jenkins and Run the Pipeline (To be added):**
-    *   *(This section will be filled out once Jenkins is configured.)*
+7. Jenkins Setup for Local CI/CD
 
+This project uses a custom Jenkins instance running in Docker to orchestrate the pipeline.
+
+**A. Create the Jenkins Dockerfile:**
+
+The official Jenkins image lacks the necessary Docker CLI tools. We must first create a custom image. Create a new file named `jenkins.Dockerfile` in the project root with the following content:
+
+```dockerfile
+# Start from the official, stable Jenkins image
+FROM jenkins/jenkins:lts-jdk11
+
+# Switch to the root user to install packages
+USER root
+
+# Install dependencies and the Docker CLI client
+RUN apt-get update && apt-get install -y lsb-release curl gpg
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+RUN apt-get update && apt-get install -y docker-ce-cli
+
+# Create the 'docker' group and add the 'jenkins' user to it to solve socket permissions
+RUN groupadd -g 999 docker
+RUN usermod -aG docker jenkins
+
+# Switch back to the non-root 'jenkins' user
+USER jenkins
 8.  **Verify the Cloud Deployment:**
     *   *(This section will detail how to get the Load Balancer IP from Kubernetes.)*
     
@@ -212,6 +236,35 @@ A log of challenges faced and their solutions.
 *   **Root Cause:** The default health checks from the Application Load Balancer (ALB) created by the AWS Load Balancer Controller need to be able to reach the specific NodePort on the instances. While a general rule was present, creating a specific rule for the NodePort resolved the health check failures.
 
 *   **Lesson Learned:** When debugging Kubernetes networking, it's critical to isolate the problem scope. Testing connectivity from *inside* the cluster (`pod-to-service`) is the fastest way to determine if the problem is internal or external.
+
+---
+
+* **Issue:** Jenkins: `docker: not found` Error
+
+*   **Symptom:** The pipeline fails in the build stage with an error `docker: not found`.
+*   **Analysis:** This indicates that the Jenkins agent executing the pipeline does not have the Docker command-line tools installed in its `PATH`. Even if the "Docker Pipeline" plugin is installed, it often relies on an available `docker` executable for its `docker.build()` steps.
+*   **Solution:** The problem was solved by implementing a modern Jenkins-as-Code best practice:
+    1.  The `Jenkinsfile` was updated to use a **Docker agent** (`agent { docker { image 'docker:24.0' ... } }`). This forces the build to run inside a temporary container that is guaranteed to have the Docker CLI.
+    2.  This created a secondary problem, as the main Jenkins controller now needed the Docker CLI to *start* the agent container.
+    3.  The final solution was to create a custom `jenkins.Dockerfile` that uses the official `jenkins/jenkins:lts-jdk11` image as a base and adds the `docker-ce-cli` package to it. This provides the controller with the necessary tools.
+
+### Jenkins: Docker Socket `permission denied`
+
+*   **Symptom:** The pipeline fails with `permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock`.
+*   **Analysis:** The `jenkins` user inside the container (with a user ID like `1000`) does not have permission to access the Docker socket file mounted from the host machine. On the host, this socket is typically owned by `root` and accessible by the `docker` group.
+*   **Solution:** The `jenkins.Dockerfile` was updated to first create a `docker` group (with a static Group ID of `999` for predictability) and then add the `jenkins` user to this group using `RUN groupadd ...` and `RUN usermod -aG docker jenkins`. This grants the user inside the container the necessary permissions to use the mounted socket.
+
+### Jenkins: `Invalid agent type "docker"` Error
+
+*   **Symptom:** The pipeline fails immediately with a compilation error, stating that `docker` is not a valid agent type.
+*   **Analysis:** This error means the Jenkins controller does not understand the `agent { docker { ... } }` syntax in the `Jenkinsfile`.
+*   **Solution:** The **"Docker Pipeline"** plugin was not installed or not loaded correctly. The fix was to install it via `Manage Jenkins -> Plugins` and then **restart the Jenkins service** (`docker restart jenkins-server`) to ensure it was loaded properly.
+
+### Jenkins: `couldn't find remote ref refs/heads/master`
+
+*   **Symptom:** The pipeline fails during the `checkout` stage with a Git error stating it cannot find the `master` branch.
+*   **Analysis:** The Jenkins pipeline job was configured to look for a branch named `master` by default. However, this repository, like many modern repositories, uses `main` as its primary branch.
+*   **Solution:** The fix was to edit the pipeline job configuration in the Jenkins UI (`Configure -> Pipeline -> Branches to build`) and change the **Branch Specifier** from `*/master` to `*/main`.
 ---
 
 ## 8. Cleanup
