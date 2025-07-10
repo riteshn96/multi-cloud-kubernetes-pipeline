@@ -66,13 +66,13 @@ pipeline {
                                     def imageTag = env.GIT_COMMIT.take(7)
                                     echo "Deploying image with tag: ${imageTag} to AKS..."
 
-                                    // 1. Install Alpine prerequisites for Azure CLI
-                                    sh 'apk add --no-cache python3 py3-pip py3-setuptools py3-wheel py3-cffi libffi-dev openssl-dev build-base'
+                                    // 1. Install Alpine prerequisites, now including python3-dev
+                                    sh 'apk add --no-cache python3 py3-pip py3-setuptools py3-wheel py3-cffi libffi-dev openssl-dev build-base python3-dev'
 
                                     // 2. Install the Azure CLI using pip
                                     sh 'pip install azure-cli'
 
-                                    // 3. Login and connect kubectl (the 'az' command is now in the path)
+                                    // 3. Login and connect kubectl
                                     sh 'az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID'
                                     sh "az aks get-credentials --resource-group ${AZURE_RG_NAME} --name ${AZURE_AKS_NAME} --overwrite-existing"
 
