@@ -39,12 +39,11 @@ pipeline {
             parallel {
                 
                 stage('Deploy to AWS EKS') {
-                    // NO AGENT BLOCK HERE
                     steps {
-                        // THIS IS THE CORRECTED PATTERN
-                        docker.image('alpine/k8s:1.27.5').inside {
-                            withCredentials([aws(credentialsId: 'aws-credentials')]) {
-                                script {
+                        // All scripted commands must be inside a 'script' block
+                        script {
+                            docker.image('alpine/k8s:1.27.5').inside {
+                                withCredentials([aws(credentialsId: 'aws-credentials')]) {
                                     def imageTag = env.GIT_COMMIT.take(7)
                                     echo "Deploying image with tag: ${imageTag} to EKS..."
                                     sh "export AWS_DEFAULT_REGION=${AWS_REGION}"
@@ -59,12 +58,11 @@ pipeline {
                 }
 
                 stage('Deploy to Azure AKS') {
-                    // NO AGENT BLOCK HERE
                     steps {
-                        // THIS IS THE CORRECTED PATTERN
-                        docker.image('alpine/k8s:1.27.5').inside {
-                            withCredentials([azureServicePrincipal(credentialsId: 'azure-credentials')]) {
-                                script {
+                        // All scripted commands must be inside a 'script' block
+                        script {
+                            docker.image('alpine/k8s:1.27.5').inside {
+                                withCredentials([azureServicePrincipal(credentialsId: 'azure-credentials')]) {
                                     def imageTag = env.GIT_COMMIT.take(7)
                                     echo "Deploying image with tag: ${imageTag} to AKS..."
                                     sh 'apk add --no-cache curl'
