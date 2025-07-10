@@ -1,8 +1,7 @@
-// Jenkinsfile - Final Version with Docker Agent
+// Jenkinsfile - Final Version with Docker Agent and Push Step
 
 pipeline {
     // Tell Jenkins to run all stages inside a Docker container
-    // This container has the 'docker' command available
     agent {
         docker { 
             image 'docker:24.0' // Use a specific, stable version of the official Docker image
@@ -23,21 +22,23 @@ pipeline {
         }
 
         stage('Build & Push Docker Image') {
-    steps {
-        script {
-            def imageTag = "${env.DOCKER_IMAGE_NAME}:${env.GIT_COMMIT.take(7)}"
-            
-            // This block will log in to GHCR using the credentials we just added
-            docker.withRegistry('https://ghcr.io', 'ghcr-credentials') {
-                
-                // Build the image
-                def customImage = docker.build(imageTag)
-                
-                // Push the image to the registry
-                customImage.push()
-                
-                echo "Successfully built and pushed image: ${imageTag}"
-            }
-        }
-    }
-}
+            steps {
+                script {
+                    def imageTag = "${env.DOCKER_IMAGE_NAME}:${env.GIT_COMMIT.take(7)}"
+                    
+                    // This block will log in to GHCR using the credentials we just added
+                    docker.withRegistry('https://ghcr.io', 'ghcr-credentials') {
+                        
+                        // Build the image
+                        def customImage = docker.build(imageTag)
+                        
+                        // Push the image to the registry
+                        customImage.push()
+                        
+                        echo "Successfully built and pushed image: ${imageTag}"
+                    } // <- This brace closes the withRegistry block
+                } // <- This brace closes the script block
+            } // <- This brace closes the steps block
+        } // <- This brace closes the stage block
+    } // <- This brace closes the stages block
+} // <- This brace closes the pipeline block
