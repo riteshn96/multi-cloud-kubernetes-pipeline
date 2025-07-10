@@ -1,44 +1,71 @@
-// Jenkinsfile - Final Version with Docker Agent and Push Step
+// Jenkinsfile with Deploy Stage
 
 pipeline {
-    // Tell Jenkins to run all stages inside a Docker container
-    agent {
-        docker { 
-            image 'docker:24.0' // Use a specific, stable version of the official Docker image
-            args '-v /var/run/docker.sock:/var/run/docker.sock' // Mount the socket into THIS container too
-        }
-    }
+    // This top-level agent is now just a lightweight coordinator
+    agent any
 
     environment {
         DOCKER_IMAGE_NAME = "ghcr.io/riteshn96/multi-cloud-devops-pipeline"
+        AWS_REGION        = "us-east-1"      // Your EKS region
+        EKS_CLUSTER_NAME  = "my-app-cluster" // Your EKS cluster name
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                // Now we need to check out the code from the real repository
                 checkout scm
             }
         }
 
         stage('Build & Push Docker Image') {
+            // Use a specific agent for this stage
+            agent {
+                docker { 
+                    image 'docker:24.0'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
             steps {
                 script {
                     def imageTag = "${env.DOCKER_IMAGE_NAME}:${env.GIT_COMMIT.take(7)}"
-                    
-                    // This block will log in to GHCR using the credentials we just added
                     docker.withRegistry('https://ghcr.io', 'ghcr-credentials') {
-                        
-                        // Build the image
                         def customImage = docker.build(imageTag)
-                        
-                        // Push the image to the registry
                         customImage.push()
-                        
                         echo "Successfully built and pushed image: ${imageTag}"
-                    } // <- This brace closes the withRegistry block
-                } // <- This brace closes the script block
-            } // <- This brace closes the steps block
-        } // <- This brace closes the stage block
-    } // <- This brace closes the stages block
-} // <- This brace closes the pipeline block
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to AWS EKS') {
+            // Use a different agent that has all our deployment tools
+            agent {
+                docker {
+                    image 'bitnami/kubectl:1.27' // Using a version-specific image
+                }
+            }
+            steps {
+                // Wrap steps in a block that provides the AWS credentials
+                withCredentials([aws(credentials: 'aws-credentials')]) {
+                    script {
+                        def imageTag = env.GIT_COMMIT.take(7)
+                        
+                        echo "Deploying image with tag: ${imageTag} to EKS cluster: ${EKS_CLUSTER_NAME}"
+                        
+                        // 1. Configure kubectl to connect to the EKS cluster
+                        sh "aws eks --region ${AWS_REGION} update-kubeconfig --name ${EKS_CLUSTER_NAME}"
+                        
+                        // 2. Use kustomize to set the new image tag in the deployment manifest
+                        // The 'cd' is important because kustomize runs from the current directory
+                        sh "cd kubernetes && kustomize edit set image ghcr.io/riteshn96/multi-cloud-devops-pipeline=ghcr.io/riteshn96/multi-cloud-devops-pipeline:${imageTag}"
+                        
+                        // 3. Apply the updated manifests to the cluster
+                        sh "kustomize build kubernetes/ | kubectl apply -f -"
+                        
+                        echo "Deployment to EKS successful!"
+                    }
+                }
+            }
+        }
+    } // End of stages
+} // End of pipeline
