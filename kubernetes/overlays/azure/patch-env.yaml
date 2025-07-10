@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-web-app-deployment
+spec:
+  template:
+    spec:
+      containers:
+      - name: web-server-container
+        env:
+        - name: CLOUD_PROVIDER
+          value: "Azure"
