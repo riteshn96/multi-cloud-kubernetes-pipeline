@@ -50,10 +50,11 @@ The repository is structured to separate concerns, making it clean and maintaina
 ├── app.py
 ├── requirements.txt
 ├── Dockerfile
-├── jenkins.Dockerfile   
+├── jenkins.Dockerfile
 ├── kubernetes/
-│   ├── deployment.yaml
-│   └── service.yaml
+│ ├── deployment.yaml
+│ ├── service.yaml
+│ └── kustomization.yaml   # <-- Add this line
 ├── terraform/
 │   └── main.tf
 ├── Jenkinsfile
@@ -206,6 +207,7 @@ The repository is structured to separate concerns, making it clean and maintaina
 *   **Secrets Management:** Jenkins credentials store all sensitive keys (AWS, Azure, Docker Hub). No secrets are hardcoded in the repository.
 *   **Multi-Cloud Strategy:** Deploying to both AWS and Azure demonstrates a strategy for high availability and avoiding vendor lock-in.
 *   **Pinned Dependencies for Reproducible Builds:** The `requirements.txt` file specifies exact versions for packages (e.g., `Werkzeug==2.2.2`). This prevents unexpected build failures caused by upstream library updates and ensures that the Docker image is built with the same dependencies every time, leading to highly predictable and stable builds.
+*   **Declarative Application Management (Kustomize):** Instead of using brittle `sed` commands to change the image tag in our Kubernetes manifests, we use `kustomize`. This allows us to declaratively manage our application configuration. The pipeline simply tells `kustomize` the new image tag, and `kustomize` handles the generation of the final manifest. This is cleaner, less error-prone, and makes it trivial to manage different configurations for different environments (like AWS vs. Azure).
 
 ---
 
@@ -274,22 +276,32 @@ A log of challenges faced and their solutions.
 
 * **Issue:** Jenkins: `docker: not found`, Socket `permission denied`, and `Invalid agent type "docker"`
 
-*   **Symptoms:** A series of cascading errors occurred when setting up the Jenkins pipeline:
+    *   **Symptoms:** A series of cascading errors occurred when setting up the Jenkins pipeline:
     1.  `Invalid agent type "docker"`: The pipeline failed immediately, unable to parse the `agent { docker { ... } }` syntax.
     2.  `docker: not found`: The pipeline failed when trying to execute `docker pull` or `docker build`.
     3.  `permission denied ... to connect to the Docker daemon socket`: Jenkins could find the Docker socket but lacked the OS permissions to use it.
 
-*   **Analysis:** This was a multi-layered problem stemming from using a bare-bones Jenkins image:
+    *   **Analysis:** This was a multi-layered problem stemming from using a bare-bones Jenkins image:
     1.  The **"Docker Pipeline" plugin** was missing, which is required for Jenkins to understand the `agent { docker { ... } }` syntax.
     2.  Even with the plugin, the main Jenkins controller container (`jenkins/jenkins:lts-jdk11`) does not have the Docker CLI installed, so it cannot execute commands like `docker pull` to start the agent.
     3.  Even with the CLI installed, the `jenkins` user inside the container does not belong to the `docker` group, so it cannot access the Docker socket mounted from the host.
 
-*   **Solution:** A robust, modern Jenkins-as-Code solution was implemented:
+    *   **Solution:** A robust, modern Jenkins-as-Code solution was implemented:
     1.  The **"Docker Pipeline"** plugin was installed via the Jenkins UI (`Manage Jenkins -> Plugins`).
     2.  A custom `jenkins.Dockerfile` was created to build a new Jenkins controller image. This file uses the official `lts-jdk11` image as a base and then:
         *   Installs the `docker-ce-cli` package.
         *   Creates a `docker` group and adds the `jenkins` user to it, solving the socket permissions issue permanently.
     3.  The `Jenkinsfile` was configured to use a **Docker agent** (`agent { docker { image 'docker:24.0' ... } }`), ensuring that the build steps run in a clean, predictable environment that is guaranteed to have the necessary tools.
+
+        ### Debugging the Jenkins CD Stage to EKS
+
+**Problem:** The deployment stage failed with a series of different errors, including container  `ENTRYPOINT` issues, `NullPointerException` on credentials, and finally `aws: not found`.
+  *   **Systematic Analysis:**
+    1.  The first agent image (`bitnami/kubectl`) failed because its `ENTRYPOINT` was not designed for a CI/CD-style execution, causing it to exit immediately.
+    2.  The `withCredentials` binding for AWS has a very specific syntax (`credentialsId` instead of `credentials`) which was causing a `NullPointerException`.
+    3.  The final error, `aws: not found`, proved that the `bitnami/kubectl` image was insufficient as it did not include the AWS CLI.
+  *   **Solution:** The problem was solved by selecting an agent image specifically designed for CI/CD workflows. We switched the agent in the deployment stage to `alpine/k8s:1.27.5`. This single image contains `kubectl`, `aws-cli`, and `kustomize`, providing a complete and stable toolset for the deployment job.
+  *   **Lesson Learned:** Choosing the right agent environment for each stage of a pipeline is critical. A single, comprehensive agent image is often more reliable than trying to chain together multiple single-purpose images.
 
 ## 8. Cleanup
 
