@@ -449,6 +449,6 @@ This section logs common issues encountered during setup and their resolutions.
 To avoid incurring cloud costs, remember to destroy all infrastructure after you are finished.
 
 ```bash
-cd terraform/
-terraform workspace select aws && terraform destroy
-terraform workspace select azure && terraform destroy
+# For PowerShell (Windows)
+terraform workspace select aws ; terraform destroy
+terraform workspace select azure ; terraform destroy
