@@ -10,14 +10,36 @@ pipeline {
     }
 
     stages {
-        // ... Checkout and Build stages are correct and remain unchanged ...
-        stage('Checkout Code') { /* ... */ }
-        stage('Build & Push Docker Image') { /* ... */ }
+        // --- Full Checkout Code Stage ---
+        stage('Checkout Code') {
+            steps {
+                checkout scm
+            }
+        }
+
+        // --- Full Build & Push Stage ---
+        stage('Build & Push Docker Image') {
+            agent {
+                docker {
+                    image 'docker:24.0'
+                    args '-v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
+            steps {
+                script {
+                    def imageTag = "${env.DOCKER_IMAGE_NAME}:${env.GIT_COMMIT.take(7)}"
+                    docker.withRegistry('https://ghcr.io', 'ghcr-credentials') {
+                        def customImage = docker.build(imageTag)
+                        customImage.push()
+                        echo "Successfully built and pushed image: ${imageTag}"
+                    }
+                }
+            }
+        }
 
         stage('Deploy to Cloud Providers') {
             parallel {
                 
-                // --- THIS STAGE IS ALREADY WORKING PERFECTLY ---
                 stage('Deploy to AWS EKS') {
                     steps {
                         script {
@@ -36,7 +58,6 @@ pipeline {
                     }
                 }
 
-                // --- THIS STAGE IS BEING FIXED ---
                 stage('Deploy to Azure AKS') {
                     steps {
                         script {
@@ -44,18 +65,10 @@ pipeline {
                                 withCredentials([azureServicePrincipal(credentialsId: 'azure-credentials')]) {
                                     def imageTag = env.GIT_COMMIT.take(7)
                                     echo "Deploying image with tag: ${imageTag} to AKS..."
-
-                                    // 1. Install necessary tools: bash and curl
                                     sh 'apk add --no-cache bash curl'
-
-                                    // 2. Use Microsoft's official installer script
                                     sh 'curl -sL https://aka.ms/InstallAzureCLIDeb | bash'
-                                    
-                                    // 3. Login and connect kubectl (use the full path to the new 'az' binary)
-                                    sh '/usr/bin/az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZROURE_TENANT_ID'
+                                    sh '/usr/bin/az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID'
                                     sh "/usr/bin/az aks get-credentials --resource-group ${AZURE_RG_NAME} --name ${AZURE_AKS_NAME} --overwrite-existing"
-
-                                    // 4. Kustomize and apply
                                     sh "cd kubernetes/overlays/azure && kustomize edit set image ghcr.io/riteshn96/multi-cloud-devops-pipeline:${imageTag}"
                                     sh "kustomize build kubernetes/overlays/azure | kubectl apply -f -"
                                     echo "Deployment to AKS successful!"
