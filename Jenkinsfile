@@ -6,7 +6,7 @@ pipeline {
 
     // Define environment variables to be used throughout the pipeline
     environment {
-        // !!! IMPORTANT: Change this to your actual GitHub username or organization !!!
+        // This is your GitHub username, it's correct.
         DOCKER_IMAGE_NAME = "ghcr.io/riteshn96/multi-cloud-devops-pipeline" 
     }
 
@@ -26,6 +26,7 @@ pipeline {
                     def imageTag = "${env.DOCKER_IMAGE_NAME}:${env.GIT_COMMIT.take(7)}"
                     
                     // Build the Docker image using the Docker plugin
+                    // This is the corrected line.
                     docker.build(imageTag)
 
                     echo "Successfully built image: ${imageTag}"
