@@ -23,19 +23,20 @@ pipeline {
         }
 
         stage('Build & Push Docker Image') {
-            steps {
-                script {
-                    def imageTag = "${env.DOCKER_IMAGE_NAME}:${env.GIT_COMMIT.take(7)}"
-                    
-                    echo "--- Building inside a Docker Agent ---"
-                    
-                    // This command will now work because the 'docker:24.0' container has the 'docker' CLI
-                    docker.build(imageTag)
-
-                    echo "Successfully built image: ${imageTag}"
-                    
-                    // We will add the push step here next, after configuring credentials
-                }
+    steps {
+        script {
+            def imageTag = "${env.DOCKER_IMAGE_NAME}:${env.GIT_COMMIT.take(7)}"
+            
+            // This block will log in to GHCR using the credentials we just added
+            docker.withRegistry('https://ghcr.io', 'ghcr-credentials') {
+                
+                // Build the image
+                def customImage = docker.build(imageTag)
+                
+                // Push the image to the registry
+                customImage.push()
+                
+                echo "Successfully built and pushed image: ${imageTag}"
             }
         }
     }
