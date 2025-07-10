@@ -5,7 +5,7 @@ pipeline {
         DOCKER_IMAGE_NAME = "ghcr.io/riteshn96/multi-cloud-devops-pipeline"
         AWS_REGION        = "us-east-1"
         EKS_CLUSTER_NAME  = "my-app-cluster"
-        AZURE_RG_NAME     = "my-aks-resource-group"
+        AZURE_RG_NAME     = "my-app-aks-rg"
         AZURE_AKS_NAME    = "my-app-aks-cluster"
     }
 
