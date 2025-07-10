@@ -74,7 +74,7 @@ pipeline {
 
                                     // 3. Login and connect kubectl
                                     sh 'az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID'
-                                    sh "az aks get-credentials --resource-group ${AZURE_RG_NAME} --name ${AZURE_AKS_NAME} --overwrite-existing"
+                                    sh "az aks get-credentials --admin --resource-group ${AZURE_RG_NAME} --name ${AZURE_AKS_NAME} --overwrite-existing"
 
                                     // 4. Kustomize and apply
                                     sh "cd kubernetes/overlays/azure && kustomize edit set image ghcr.io/riteshn96/multi-cloud-devops-pipeline:${imageTag}"
