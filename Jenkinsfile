@@ -72,15 +72,16 @@ pipeline {
                                     // 2. Install the Azure CLI
                                     sh 'curl -sL https://aka.ms/InstallAzureCLIDeb | bash'
                                     
-                                    // 3. Define the path to the 'az' executable
-                                    //    The installer places it in the root user's local bin directory
-                                    def az_path = "/root/.local/bin/az"
+                                    // 3. *** THE FINAL FIX ***
+                                    //    Add the new 'az' command's location to the system PATH.
+                                    //    Then, run the az commands. The shell will now be able to find them.
+                                    sh '''
+                                       export PATH=$PATH:/root/.local/bin
+                                       az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+                                       az aks get-credentials --resource-group ${AZURE_RG_NAME} --name ${AZURE_AKS_NAME} --overwrite-existing
+                                    '''
 
-                                    // 4. Login and connect kubectl using the full path
-                                    sh "${az_path} login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID"
-                                    sh "${az_path} aks get-credentials --resource-group ${AZURE_RG_NAME} --name ${AZURE_AKS_NAME} --overwrite-existing"
-
-                                    // 5. Kustomize and apply
+                                    // 4. Kustomize and apply
                                     sh "cd kubernetes/overlays/azure && kustomize edit set image ghcr.io/riteshn96/multi-cloud-devops-pipeline:${imageTag}"
                                     sh "kustomize build kubernetes/overlays/azure | kubectl apply -f -"
                                     echo "Deployment to AKS successful!"
