@@ -47,16 +47,17 @@ The primary goal is to showcase a robust, automated, and multi-cloud deployment 
 The repository is structured to separate concerns, making it clean and maintainable.
 
 .
-├── app.py # The Python Flask web application
-├── requirements.txt # Python dependencies for the application
-├── Dockerfile # Instructions to build the application's Docker container
-├── kubernetes/ # Kubernetes manifest files (to be added)
-│ ├── deployment.yaml
-│ └── service.yaml
-├── terraform/ # Terraform code for infrastructure (to be added)
-│ └── main.tf
-├── Jenkinsfile # The CI/CD pipeline-as-code (to be added)
-└── README.md # Project documentation (this file)
+├── app.py
+├── requirements.txt
+├── Dockerfile
+├── jenkins.Dockerfile   
+├── kubernetes/
+│   ├── deployment.yaml
+│   └── service.yaml
+├── terraform/
+│   └── main.tf
+├── Jenkinsfile
+└── README.md
 
 
 ## 5. How to Run This Project
@@ -129,33 +130,65 @@ The repository is structured to separate concerns, making it clean and maintaina
     ip-10-0-2-140.ec2.internal   Ready    <none>   112m   v1.27.16-eks-aeac579
         ```
 
-7. Jenkins Setup for Local CI/CD
+ 7. Jenkins Setup and CI Pipeline
 
-This project uses a custom Jenkins instance running in Docker to orchestrate the pipeline.
+    This project uses a custom Jenkins instance running in Docker to orchestrate the CI/CD pipeline.
 
-**A. Create the Jenkins Dockerfile:**
+    **A. Create the Jenkins Dockerfile:**
 
-The official Jenkins image lacks the necessary Docker CLI tools. We must first create a custom image. Create a new file named `jenkins.Dockerfile` in the project root with the following content:
+    The official Jenkins image lacks the Docker CLI tools needed to run the pipeline. We first create a custom Jenkins controller image that includes these tools. Create a new file named `jenkins.Dockerfile` in the project root:
 
-```dockerfile
-# Start from the official, stable Jenkins image
-FROM jenkins/jenkins:lts-jdk11
+  ```dockerfile
+  # Start from the official, stable Jenkins image
+ FROM jenkins/jenkins:lts-jdk11
 
-# Switch to the root user to install packages
-USER root
+ # Switch to the root user to install packages
+ USER root
 
-# Install dependencies and the Docker CLI client
-RUN apt-get update && apt-get install -y lsb-release curl gpg
-RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-RUN apt-get update && apt-get install -y docker-ce-cli
+ # Install dependencies and the Docker CLI client
+ RUN apt-get update && apt-get install -y lsb-release curl gpg
+ RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+ RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+ RUN apt-get update && apt-get install -y docker-ce-cli
 
-# Create the 'docker' group and add the 'jenkins' user to it to solve socket permissions
-RUN groupadd -g 999 docker
-RUN usermod -aG docker jenkins
+ # Create a 'docker' group and add the 'jenkins' user to it to solve socket permissions
+ RUN groupadd -g 999 docker
+ RUN usermod -aG docker jenkins
 
-# Switch back to the non-root 'jenkins' user
-USER jenkins
+ # Switch back to the non-root 'jenkins' user
+ USER jenkins
+ Use code with caution.
+ Markdown
+ B. Build and Run the Custom Jenkins Container:
+ Build the custom Jenkins image from the jenkins.Dockerfile:
+ Generated bash
+ docker build -t my-custom-jenkins -f jenkins.Dockerfile .
+ Use code with caution.
+ Bash
+ Run the Jenkins container. This command persists Jenkins data in a volume and mounts the host's Docker socket, allowing Jenkins to orchestrate Docker builds.
+ Generated bash
+ docker run -d --name jenkins-server \
+  -p 8080:8080 -p 50000:50000 \
+  -v jenkins_home:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  my-custom-jenkins
+ Use code with caution.
+ Bash
+ C. Configure the Jenkins Job:
+ Access Jenkins at http://localhost:8080.
+ Unlock Jenkins using the initial admin password:
+ Generated bash
+ docker exec jenkins-server cat /var/jenkins_home/secrets/initialAdminPassword
+ Use code with caution.
+ Bash
+ Install suggested plugins and create an admin user.
+ Create a New Item, name it multi-cloud-devops-pipeline, and select Pipeline.
+ Configure the pipeline:
+ Definition: Pipeline script from SCM
+ SCM: Git
+ Repository URL: Your project's GitHub URL.
+ Branch Specifier: */main
+ Save and run Build Now. The pipeline will automatically build the Docker image and push it to GHCR.
 8.  **Verify the Cloud Deployment:**
     *   *(This section will detail how to get the Load Balancer IP from Kubernetes.)*
     
@@ -239,33 +272,24 @@ A log of challenges faced and their solutions.
 
 ---
 
-* **Issue:** Jenkins: `docker: not found` Error
+* **Issue:** Jenkins: `docker: not found`, Socket `permission denied`, and `Invalid agent type "docker"`
 
-*   **Symptom:** The pipeline fails in the build stage with an error `docker: not found`.
-*   **Analysis:** This indicates that the Jenkins agent executing the pipeline does not have the Docker command-line tools installed in its `PATH`. Even if the "Docker Pipeline" plugin is installed, it often relies on an available `docker` executable for its `docker.build()` steps.
-*   **Solution:** The problem was solved by implementing a modern Jenkins-as-Code best practice:
-    1.  The `Jenkinsfile` was updated to use a **Docker agent** (`agent { docker { image 'docker:24.0' ... } }`). This forces the build to run inside a temporary container that is guaranteed to have the Docker CLI.
-    2.  This created a secondary problem, as the main Jenkins controller now needed the Docker CLI to *start* the agent container.
-    3.  The final solution was to create a custom `jenkins.Dockerfile` that uses the official `jenkins/jenkins:lts-jdk11` image as a base and adds the `docker-ce-cli` package to it. This provides the controller with the necessary tools.
+*   **Symptoms:** A series of cascading errors occurred when setting up the Jenkins pipeline:
+    1.  `Invalid agent type "docker"`: The pipeline failed immediately, unable to parse the `agent { docker { ... } }` syntax.
+    2.  `docker: not found`: The pipeline failed when trying to execute `docker pull` or `docker build`.
+    3.  `permission denied ... to connect to the Docker daemon socket`: Jenkins could find the Docker socket but lacked the OS permissions to use it.
 
-### Jenkins: Docker Socket `permission denied`
+*   **Analysis:** This was a multi-layered problem stemming from using a bare-bones Jenkins image:
+    1.  The **"Docker Pipeline" plugin** was missing, which is required for Jenkins to understand the `agent { docker { ... } }` syntax.
+    2.  Even with the plugin, the main Jenkins controller container (`jenkins/jenkins:lts-jdk11`) does not have the Docker CLI installed, so it cannot execute commands like `docker pull` to start the agent.
+    3.  Even with the CLI installed, the `jenkins` user inside the container does not belong to the `docker` group, so it cannot access the Docker socket mounted from the host.
 
-*   **Symptom:** The pipeline fails with `permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock`.
-*   **Analysis:** The `jenkins` user inside the container (with a user ID like `1000`) does not have permission to access the Docker socket file mounted from the host machine. On the host, this socket is typically owned by `root` and accessible by the `docker` group.
-*   **Solution:** The `jenkins.Dockerfile` was updated to first create a `docker` group (with a static Group ID of `999` for predictability) and then add the `jenkins` user to this group using `RUN groupadd ...` and `RUN usermod -aG docker jenkins`. This grants the user inside the container the necessary permissions to use the mounted socket.
-
-### Jenkins: `Invalid agent type "docker"` Error
-
-*   **Symptom:** The pipeline fails immediately with a compilation error, stating that `docker` is not a valid agent type.
-*   **Analysis:** This error means the Jenkins controller does not understand the `agent { docker { ... } }` syntax in the `Jenkinsfile`.
-*   **Solution:** The **"Docker Pipeline"** plugin was not installed or not loaded correctly. The fix was to install it via `Manage Jenkins -> Plugins` and then **restart the Jenkins service** (`docker restart jenkins-server`) to ensure it was loaded properly.
-
-### Jenkins: `couldn't find remote ref refs/heads/master`
-
-*   **Symptom:** The pipeline fails during the `checkout` stage with a Git error stating it cannot find the `master` branch.
-*   **Analysis:** The Jenkins pipeline job was configured to look for a branch named `master` by default. However, this repository, like many modern repositories, uses `main` as its primary branch.
-*   **Solution:** The fix was to edit the pipeline job configuration in the Jenkins UI (`Configure -> Pipeline -> Branches to build`) and change the **Branch Specifier** from `*/master` to `*/main`.
----
+*   **Solution:** A robust, modern Jenkins-as-Code solution was implemented:
+    1.  The **"Docker Pipeline"** plugin was installed via the Jenkins UI (`Manage Jenkins -> Plugins`).
+    2.  A custom `jenkins.Dockerfile` was created to build a new Jenkins controller image. This file uses the official `lts-jdk11` image as a base and then:
+        *   Installs the `docker-ce-cli` package.
+        *   Creates a `docker` group and adds the `jenkins` user to it, solving the socket permissions issue permanently.
+    3.  The `Jenkinsfile` was configured to use a **Docker agent** (`agent { docker { image 'docker:24.0' ... } }`), ensuring that the build steps run in a clean, predictable environment that is guaranteed to have the necessary tools.
 
 ## 8. Cleanup
 
