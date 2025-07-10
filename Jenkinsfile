@@ -72,16 +72,23 @@ pipeline {
                                     // 2. Install the Azure CLI
                                     sh 'curl -sL https://aka.ms/InstallAzureCLIDeb | bash'
                                     
-                                    // 3. *** THE FINAL FIX ***
-                                    //    Add the new 'az' command's location to the system PATH.
-                                    //    Then, run the az commands. The shell will now be able to find them.
-                                    sh '''
-                                       export PATH=$PATH:/root/.local/bin
-                                       az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
-                                       az aks get-credentials --resource-group ${AZURE_RG_NAME} --name ${AZURE_AKS_NAME} --overwrite-existing
-                                    '''
+                                    // 3. *** THE DIAGNOSTIC STEP ***
+                                    //    This command will search the entire container filesystem for the 'az' executable
+                                    //    and print its location to the log.
+                                    sh 'find / -name az'
+                                    
+                                    // 4. *** THE ACTUAL FIX ***
+                                    //    We will now directly call the 'az' command using the path we just found.
+                                    //    The 'find' command will tell us what this path should be, but it's
+                                    //    almost certainly /usr/local/bin/az or similar.
+                                    //    We will try with the most likely path first.
+                                    def az_path = '/usr/local/bin/az'
 
-                                    // 4. Kustomize and apply
+                                    // 5. Login and connect kubectl using the full path
+                                    sh "${az_path} login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID"
+                                    sh "${az_path} aks get-credentials --resource-group ${AZURE_RG_NAME} --name ${AZURE_AKS_NAME} --overwrite-existing"
+
+                                    // 6. Kustomize and apply
                                     sh "cd kubernetes/overlays/azure && kustomize edit set image ghcr.io/riteshn96/multi-cloud-devops-pipeline:${imageTag}"
                                     sh "kustomize build kubernetes/overlays/azure | kubectl apply -f -"
                                     echo "Deployment to AKS successful!"
