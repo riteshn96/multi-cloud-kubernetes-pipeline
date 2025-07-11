@@ -1,4 +1,4 @@
-# Multi-Cloud Kubernetes CI/CD Pipeline for a Containerized Application
+# Multi-Cloud Kubernetes CI/CD Pipeline
 End-to-end CI/CD pipeline using Terraform, Jenkins, Docker, and Kubernetes on AWS & Azure;
 
 
